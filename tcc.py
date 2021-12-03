@@ -12,7 +12,7 @@ import torch
 import torch.backends.cudnn as cudnn
 
 # FILE = Path('./')
-ROOT = Path('/home/rodrigo/Documents/usp/tcc/yolov5/')  # YOLOv5 root directory
+ROOT = Path('/home/jetbot/yolov5/')  # YOLOv5 root directory
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))  # add ROOT to PATH
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
@@ -27,7 +27,8 @@ from utils.torch_utils import select_device, time_sync
 from road_follower import RoadFollower
 
 
-def main():
+def main(args):
+    load_yolo = args.load_yolo
     # Parameters
     weights = ROOT / 'best.pt'  # model.pt path(s)
     source = 0  # file/dir/URL/glob, 0 for webcam
@@ -66,18 +67,26 @@ def main():
 
     # Load model
     device = select_device(device)
-    model = DetectMultiBackend(weights, device=device, dnn=dnn)
-    stride, names, pt, jit, onnx = model.stride, model.names, model.pt, model.jit, model.onnx
-    imgsz = check_img_size(imgsz, s=stride)  # check image size
+    if load_yolo:
+        model = DetectMultiBackend(weights, device=device, dnn=dnn)
+        stride, names, pt, jit, onnx = model.stride, model.names, model.pt, model.jit, model.onnx
+        imgsz = check_img_size(imgsz, s=stride)  # check image size
+    else:
+        stride = 32
+        imgsz = check_img_size(imgsz, s=stride)  # check image size
+        pt = True
+        jit = False
+        onnx = False
 
     # Dataloader
-    view_img = check_imshow()
+    #view_img = check_imshow()
     cudnn.benchmark = True  # set True to speed up constant image size inference
     dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt and not jit)
     bs = len(dataset)  # batch_size
 
-    if pt and device.type != 'cpu':
-        model(torch.zeros(1, 3, *imgsz).to(device).type_as(next(model.model.parameters())))  # warmup
+    if load_yolo:
+        if pt and device.type != 'cpu':
+            model(torch.zeros(1, 3, *imgsz).to(device).type_as(next(model.model.parameters())))  # warmup
     dt, seen = [0.0, 0.0, 0.0], 0
 
     road_follower = RoadFollower()
@@ -92,38 +101,46 @@ def main():
             t2 = time_sync()
             dt[0] += t2 - t1
 
-            # Inference
-            # visualize = increment_path(save_dir / Path(path).stem, mkdir=True) if visualize else False
-            pred = model(im, augment=augment, visualize=False)
-            t3 = time_sync()
-            dt[1] += t3 - t2
-            # print("="*50)
-            # print("PRED FIRST:\n", pred)
+            if load_yolo:
+                # Inference
+                #visualize = increment_path(save_dir / Path(path).stem, mkdir=True) if visualize else False
+                pred = model(im, augment=augment, visualize=False)
+                t3 = time_sync()
+                dt[1] += t3 - t2
+                # print("="*50)
+                # print("PRED FIRST:\n", pred)
 
-            # NMS
-            pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
-            # print("PRED NMS:\n", pred)
-            # print("="*50)
-            dt[2] += time_sync() - t3
-            im0 = im0s.copy()
-            det = pred[0]
-            for c in det[:, -1].unique():
-                n = (det[:, -1] == c).sum()  # detections per class
-                s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
-            # image = np.asarray(im.cpu())
+                # NMS
+                pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
+                # print("PRED NMS:\n", pred)
+                # print("="*50)
+                dt[2] += time_sync() - t3
+                im0 = im0s.copy()
+                det = pred[0]
+                for c in det[:, -1].unique():
+                    n = (det[:, -1] == c).sum()  # detections per class
+                    s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
             image = im[0].cpu().permute(1, 2, 0).numpy() * 255
+            # For some reason, we must copy() for it to work
             image = np.asarray(image).astype('uint8').copy()
-            # image, _ = road_follower.update(image)
             image = road_follower.execute(image)
-            cv2.putText(image,str(s),(10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2)
-            # cv2.imshow("Test", image)
-            # key = cv2.waitKey(1) & 0xFF
-            # if key == ord("q"):
-            #     break
+            #cv2.putText(image,str(s),(10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2)
+            #cv2.imshow("Test", image)
+            #key = cv2.waitKey(1) & 0xFF
+            #if key == ord("q"):
+            #    break
     except:
         cv2.destroyAllWindows()
+        road_follower.stop()
     return 0
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-l', '--load-yolo',
+                        type=int,
+                        choices=[0,1],
+                        required=True,
+                        help='To use yolov5 or not. NO (0) YES (1)')
+    args = parser.parse_args()
+    main(args)
