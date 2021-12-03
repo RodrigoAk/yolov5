@@ -1,3 +1,10 @@
+# Introduction
+This repository contains the code used in our undergraduate's final assignment
+(TCC - Trabalho de Conclusão de Curso, in portuguese) to obtain the title of
+Mechatronics Engineers by the Escola Politécnia, Universidade de São Paulo (EP-USP).
+
+Authors: Erick Sun and Rodrigo Heira Akamine
+
 # Jetson Nano - Initial Setup
 The whole kit we are using is one offered by Sparkfun:
 <a href="https://www.sparkfun.com/products/retired/16417" target="_blank">
@@ -10,6 +17,14 @@ For the initial setup, you'll need the following items:
 - Mouse
 - Keyboard
 - Ethernet cable for internet.
+- Phone charger and micro-usb or barrel jack cable
+- For use with a "mobile" power source, and with heavy usage of CPU/GPU, it is
+recommended to power your Jetson through the barrel jack and a reliable power bank
+	- In our case, it was used the Baseus Adaman Metal Digital Display - Quick
+	Charge Power Bank - 10000mAh - 22.5W
+	- With this, the voltage supply didn't oscilate bellow 4.75V that is the Jetson's
+	minimum voltage to operate. Bellow this value, it will start to malfunction
+	and maybe even turn off.
 
 ## JetPack 4.6
 First, for our case, we are using the Jetson Nano Developer Kit, which has
@@ -31,6 +46,12 @@ Getting Started guide to flash the image to a microSD card:
 <a href="https://developer.nvidia.com/embedded/learn/get-started-jetson-nano-devkit#write" target="_blank">
     Getting Started with Jetson Nano Developer Kit
 </a>
+
+## First boot
+With the microSD card flashed, plug it in your Jetson, connect the HDMI cable,
+mouse, keyboard, wifi adapter and ethernet cable and power it up. With this you
+should see it boot up and load the Ubuntu. Next we need to install the necessary
+drivers for the wifi adapter.
 
 ## Wifi Adapter - Edimax N150
 The next steps can be found in the Sparkfun page:
@@ -70,7 +91,67 @@ sudo dkms autoinstall $PACKAGE_NAME/$PACKAGE_VERSION
 ```
 
 In case you close your terminal before finishing the installation, you need to
-run the command `source dkms.conf` to read the variables used. After finishing installing everything, you need to reboot your Jetson.
+run the command `source dkms.conf` to read the variables used. After finishing
+installing everything, you need to reboot your Jetson.
+
+Done that, you can connect to your wifi network, and with that, you will be able
+to connect to your Jetson through a `ssh` connection.
+
+## SSH Connect to Jetson
+With your Jetson connected to your network, you can run the following commands
+on your own computer to find the Jetson's IP address:
+
+```
+# If you don't have nmap installed
+sudo apt update
+sudo apt install nmap
+
+# Verify your network's IP address
+ifconfig
+
+# Now you should see a line like: inet 192.168.XX.XX
+# Just scan your network for the IP address your Jetson is using
+# Don't forget to change the XX for your network's numbers
+nmap -sn 192.168.XX.0/24  # or nmap -sL 192.168.XX.0/24
+
+# You should see one written with "jetbot" or "edimax ..."
+# Just copy that IP address and connect to it with ssh
+# And enter the password to the user
+ssh <user>@<IP address found>
+
+# If you set the user to 'jetbot' and password to 'jetbot'
+ssh jetbot@<IP address found>
+>>> Enter jetbot's password: jetbot [ENTER]
+```
+
+Another way would be to verify the Jetson's IP address inside it. Just open a terminal
+and type: `ifconfig`. You should see it's IP address, and to know the user's name
+just type `whoami`. Then in your own computer, just connect to your Jetson through
+`ssh`.
+
+## Jetson's Power Modes and Jetson Clocks
+If you are using a weaker power supply and/or micro-usb, consider turning your
+Jetson to `5W mode`. In case you have a better and more stable power supply
+you may use the `10W mode` and maybe use the overclock with the `jetson_clocks`
+command.
+
+```
+# Verify which mode is in use
+sudo nvpmodel -q
+
+# Change to 5W mode
+sudo nvpmodel -m 1
+
+# Change to 10W mode
+sudo nvpmodel -m 0
+
+# Use jetson_clocks
+sudo jetson_clocks
+```
+
+By default, Jetson uses `10W mode`, and the `jetson_clocks` turns off automatically
+when you reboot. These modes and the `jetson_clocks` can also be verified with
+the `jtop` command, which can be installed by following the steps in the next section.
 
 ## Jetson Status - jtop command
 For verifying your Jetson Nano status like CPU/GPU temperature, usage, etc. we
@@ -135,9 +216,150 @@ following command (again, use the name you chose for the environment):
 workon py3nev
 ```
 
-## `.bashrc` modifications
-Add CUDA to path
+### OpenCV import error in virtual environment:
+If it returns an error when you run a `import cv2` inside your virtual environment,
+we need to create a `symlink` from the OpenCV library installed to your virtual
+environment's import path with the following commands:
 
+```
+ln -s /usr/lib/python3.6/dist-packages/cv2/python-3.6/cv2.cpython-36m-aarch64-linux-gnu.so /home/jetbot/.virtualenvs/<your_env>/lib/python3.6/site-packages/cv2.cpython-36m-aarch64-linux-gnu.so
+```
+
+In case you can't find the library path, you can find it with the following way:
+
+```
+# Deactivate the virtual environment
+deactivate
+
+# Enter python command line
+python3
+
+# Type in the following commands
+>>> import cv2
+>>> print(cv2.__file__)
+```
+
+With the final command, if it succesfully imported the OpenCV library, it should
+print out it's file path, and with that you can create the `symlink`:
+
+```
+ln -s <file path> /home/jetbot/.virtualenvs/<your_env>/lib/python3.6/<file_name>
+```
+
+After that, you should be able to `import cv2` inside your virtual environment.
+
+## `.bashrc` modifications
+Add these lines to the end of your `~/.bashrc` file so it can find CUDA and resolve
+some problems with the architecture:
+
+```
+# CUDA
+export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+
+export OPENBLAS_CORETYPE=AARCH64
+export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1
+```
+
+After you've added these lines, run a `source ~/.bashrc` and you will be able to
+verify your CUDA version with the following command (or using `jtop`):
+
+```
+nvcc --version
+```
+
+## Installing PyTorch and TorchVision
+
+To install PyTorch, download the `wheel` for the desired version in
+<a href='https://forums.developer.nvidia.com/t/pytorch-for-jetson-version-1-10-now-available/72048' target='_blank'>
+this link
+</a>
+and follow the instructions for your CUDA, JetPack and Python version, and to install the according
+torchvision. For this project, we used the `PyTorch v1.9` and `torchvision v0.10.0`.
+
+You can also verify which PyTorch version is compatible with your CUDA in
+<a href='https://pytorch.org/get-started/previous-versions/' target='_blank'>
+this link.
+</a>
+
+## Installing QWIIC Libraries and Sparkfun's JetBot
+
+To use the Sparkfun motor drivers, you need to install their libraries with the
+following command:
+
+```
+workon <your virtual environment>
+pip install sparkfun-qwiic
+```
+
+After that, there is a repository of theirs that is a fork from NVIDIA's original
+JetBot repo that is adapted to work with their motors. To install it, run the
+following commands:
+
+```
+workon <your virtual environment>
+cd ~
+git clone https://github.com/sparkfun/jetbot
+cd jetbot && python setup.py install
+```
+
+## Turn GNOME's graphical interface off
+If you're in need of every bit of memory, you can turn the graphical interface
+that can consume more than 1GB of memory off with the following command (in case
+you're already connecting to your Jetson through SSH only):
+
+```
+# To turn the graphical interface off
+sudo systemctl set-default multi-user.target
+
+# To turn it back on
+sudo systemctl set-default graphical.target
+```
+
+## NVIDIA's TensorRT and Torch2TRT
+For better performance of your models, you can use NVIDIA's TensorRT, and NVIDIA's
+package Torch2TRT to convert your models. In this section it is explained how to
+`import` and install the package, but we were not able to effectively use it in
+our final model due to time.
+
+NVIDIA's TensorRT already comes installed with the JetPack SDK, to make it visible
+inside your virtual environment, we need to follow a similar process as in to import
+the OpenCV library steps done previously.
+
+First, we can verify how it is imported by the system's python:
+
+```
+# Enter system python
+deactivate
+python3
+
+# Import tensorrt and print its path
+>>> import tensorrt as trt
+>>> print(trt.__file__)
+```
+
+It will probably print something like `/usr/lib/python3.6/dit-packages/tensorrt/__init__.py`,
+so we need to create a `symlink` of the `tensorrt` folder to our virtual environment's 
+import path:
+
+```
+ln -s /usr/lib/python3.6/dist-packages/tensorrt /home/jetbot/.virtualenvs/<your_env>/lib/python3.6/site-packages/tensorrt
+```
+
+With this, you should be able to `import tensorrt` inside your virtual environment.
+
+After this, we can install NVIDIA's `torch2trt` which is a PyTorch to TensorRT
+converter, following their GitHub's repository:
+<a href='https://github.com/NVIDIA-AI-IOT/torch2trt' target='_blank'>
+NVIDIA-AI-IOT/torch2trt
+</a>
+
+```
+workon <your env>
+git clone https://github.com/NVIDIA-AI-IOT/torch2trt
+cd torch2trt
+python setup.py install
+```
 
 # YOLOv5
 
