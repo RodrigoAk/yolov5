@@ -248,6 +248,93 @@ ln -s <file path> /home/jetbot/.virtualenvs/<your_env>/lib/python3.6/<file_name>
 
 After that, you should be able to `import cv2` inside your virtual environment.
 
+## Use Jetson CSI Camera
+To use the CSI camera with Jetson in OpenCV, we need to pass a command to the
+`cv2.VideoCapture()` function.
+
+Inside the file `simple_camera.py` you can find a function that returns the command
+used to instantiate the camera. To open it, just pass the `command` as:
+
+```python
+cap = cv2.VideoCapture(command, cv2.CAP_GSTREAMER)
+
+# Verify if it worked
+print(cap.isOpened())  # Returns True if it worked
+```
+
+**OBS:** If the Jetson is **NOT** connected to a monitor through HDMI, the function
+`cv2.imshow()` **WILL NOT WORK**, and it will either throw an error in your script
+or reset your jupyter notebook/lab kernel. To see the image, you can either connect
+your Jetson to a monitor, or inside your jupyter notebook/lab, use the
+`IPython.display` class.
+
+```python
+import cv2
+from IPython.display import display, Image
+
+# Open cv2.VideoCapture routine: start
+...
+# end
+
+# Display handle in a separate cell
+display_handle = display(None, display_id=True)
+
+# You can put this part in a loop if you want
+_, image = camera.read()
+_, image = cv2.imencode('.jpeg', image)
+display_handle.update(Image(data=image.tobytes()))
+```
+
+## Jupyter Lab/Notebooks
+For easier file navigation and code testing, you can install `jupyter lab` and
+or `jupyter notebook` with the following command:
+
+```
+workon <your env>
+pip install jupyterlab notebook
+```
+
+Firstly, generate jupyter's configuration file:
+
+```
+jupyter notebook --generate-config
+```
+
+And the we can define the password with the following command:
+
+```
+jupyter notebook password
+```
+
+To open a server so you can access it on your own computer, run the command:
+
+```
+# For jupyter notebook
+jupyter notebook --no-browser --ip=0.0.0.0 --port=8888
+
+# For jupyter lab
+jupyter lab --no-browser --ip=0.0.0.0 --port=8888
+```
+
+Then you can access it by typing `<Jetson's IP Address>:8888` in your computer's
+browser.
+
+## `.bash_aliases` for easy access
+In your Jetson Nano there will probably exist a file called `~/.bash_aliases`
+that is imported inside your `~/.bashrc` file. In this file you can create `aliases`
+so you don't need to type big lines of commands all the time.
+
+Next we will show an example that we used:
+
+```
+alias py3="workon py3"
+alias jlb="py3 && jupyter lab --no-browser --ip=0.0.0.0 --port=8888"
+alias restart_cam="sudo systemctl restart nvargus-daemon"
+```
+
+The `restart_cam` was used to restart the `nvargus-daemon` service used to initialize
+Jetson's camera
+
 ## `.bashrc` modifications
 Add these lines to the end of your `~/.bashrc` file so it can find CUDA and resolve
 some problems with the architecture:
