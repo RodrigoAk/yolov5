@@ -5,6 +5,16 @@ Mechatronics Engineers by the Escola Politécnia, Universidade de São Paulo (EP
 
 Authors: Erick Sun and Rodrigo Heira Akamine
 
+#### Examples:
+
+Example of reduction of velocity when seeing a "person":
+
+![Alt Text](./assets/reduz_Trim.gif)
+
+Example of stopping the robot when seeing a "person":
+
+![Alt Text](./assets/parar_Trim.gif)
+
 # Jetson Nano - Initial Setup
 The whole kit we are using is one offered by Sparkfun:
 <a href="https://www.sparkfun.com/products/retired/16417" target="_blank">
@@ -402,6 +412,8 @@ sudo systemctl set-default multi-user.target
 # To turn it back on
 sudo systemctl set-default graphical.target
 ```
+
+After running the command, reboot.
 
 ## NVIDIA's TensorRT and Torch2TRT
 For better performance of your models, you can use NVIDIA's TensorRT, and NVIDIA's
